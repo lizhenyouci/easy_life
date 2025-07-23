@@ -1,5 +1,5 @@
 import streamlit as st
-from functions_st import get_excel_sheet_names, read_data_file, apply_savgol_filter, generate_interactive_plot, get_min_max_values
+from utils.functions_st import get_excel_sheet_names, read_data_file, apply_savgol_filter, generate_interactive_plot, get_min_max_values
 import pandas as pd
 import numpy as np
 from io import BytesIO
