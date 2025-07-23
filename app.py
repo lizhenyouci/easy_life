@@ -1,6 +1,7 @@
 import streamlit as st
 from functions_st import get_excel_sheet_names, read_data_file, apply_savgol_filter, generate_interactive_plot, get_min_max_values
 import pandas as pd
+import numpy as np
 from io import BytesIO
 # C:\Users\zli0003\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\Scripts\streamlit.exe run c:/Users/zli0003/PycharmProjects/ML_algorithm/streamlit/app.py
 
