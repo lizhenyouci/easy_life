@@ -1,5 +1,6 @@
 import streamlit as st
 from utils.functions_st import get_excel_sheet_names, read_data_file, apply_savgol_filter, generate_interactive_plot, get_min_max_values
+from utils.functions_st import generate_radar_chart
 import pandas as pd
 import numpy as np
 from io import BytesIO
@@ -9,7 +10,7 @@ def main():
     st.set_page_config(page_title="Data Smoothing & Visualization", page_icon= "📊", 
                     layout="wide")
     st.sidebar.title("Function Selector")
-    option = st.sidebar.selectbox("Select", ("Data Smoothing", "Min-Max Values Calculation"))
+    option = st.sidebar.selectbox("Select", ("Data Smoothing", "Min-Max Values Calculation", "Radar Chart"))
     this_moment = pd.to_datetime('now').strftime('%Y-%m-%d %H:%M:%S')
 
     if option == "Data Smoothing":
@@ -29,21 +30,17 @@ def main():
                 # File reading options
                 st.sidebar.subheader("File Reading Options")
                 # Only show sheet selection for Excel files
-                if uploaded_file.name.endswith(('.xlsx', '.xls')):
-                    try:
-                        sheet_names = get_excel_sheet_names(uploaded_file)
-                        sheet_name = st.sidebar.selectbox(
-                                "Select Sheet",
-                                sheet_names,
-                                index=0,
-                                help="Select which sheet to load from the Excel/CSV file"
-                            )
-                    except Exception as e:
-                        st.error(f"Error reading sheet names: {str(e)}")
-                        st.stop()
-                    # sheet_name = st.sidebar.text_input("Sheet Name/Number (optional)", value="0")
-                else:
-                    sheet_name = 0  # Not used for CSV files
+                try:
+                    sheet_names = get_excel_sheet_names(uploaded_file)
+                    sheet_name = st.sidebar.selectbox(
+                            "Select Sheet",
+                            sheet_names,
+                            index=0,
+                            help="Select which sheet to load from the Excel/CSV file"
+                        )
+                except Exception as e:
+                    st.error(f"Error reading sheet names: {str(e)}")
+                    st.stop()
                 # Header row selection
                 header_row = st.sidebar.number_input("Header Row (0-based)", 
                                             min_value=0, 
@@ -313,10 +310,6 @@ def main():
                                 )
                                 file_settings[(file.name, sheet_name)] = header_row
 
-                                if header_row > 0:
-                                    # Read with specified header row
-                                    warning_container.warning("⚠️ Warning: Header row is not set to 0. "
-                                        "Make sure you're selecting the correct row containing column headers.")
                         except Exception as e:
                             st.error(f"Error previewing {file.name}: {str(e)}")
                     else:  # CSV files
@@ -377,6 +370,140 @@ def main():
                         st.sidebar.error(f"Error generating report: {str(e)}")
         else:
             st.info("Please upload Excel/CSV files to begin")
+    
+    # Radar chart example
+    if option == "Radar Chart":
+        st.title("Radar Chart Generator")
+        
+        # File upload section
+        st.sidebar.header("Data Upload")
+        uploaded_file = st.sidebar.file_uploader("Upload Excel/CSV File", 
+                                            type=["xlsx", "xls", "csv"],
+                                            help="Upload data file for radar chart")
+
+        if uploaded_file is not None:
+            # Read Excel file
+            try:
+                # File reading options
+                st.sidebar.subheader("File Reading Options")
+                # Only show sheet selection for Excel files
+                try:
+                    sheet_names = get_excel_sheet_names(uploaded_file)
+                    sheet_name = st.sidebar.selectbox(
+                            "Select Sheet",
+                            sheet_names,
+                            index=0,
+                            help="Select which sheet to load from the Excel/CSV file"
+                        )
+                except Exception as e:
+                    st.error(f"Error reading sheet names: {str(e)}")
+                    st.stop()
+                # Header row selection
+                header_row = st.sidebar.number_input("Header Row (0-based)", 
+                                            min_value=0, 
+                                            max_value=10, 
+                                            value=0,
+                                            help="Row number (starting from 0) that contains column headers")
+                # Read data from the uploaded file
+                try:
+                    data = read_data_file(uploaded_file, sheet_name=sheet_name, header_row=header_row)
+                except Exception as e:
+                    st.error(f"Error reading file: {str(e)}")
+                    st.stop()
+                
+                # Display raw data preview
+                st.subheader("Raw Data Preview")
+                preview_rows = st.slider("Number of preview rows", 1, 20, 5)
+
+                # Convert object columns to string for Arrow compatibility
+                for col in data.select_dtypes(include=['object']).columns:
+                    data[col] = data[col].astype(str)
+                st.dataframe(data.head(preview_rows))
+                
+                # Column selection for radar chart
+                st.sidebar.header("Radar Chart Settings")
+                
+                # Select category column (for theta/angles)
+                category_col = st.sidebar.selectbox(
+                    "Select Category Column",
+                    data.columns,
+                    index=0,
+                    help="Select column containing category names for radar axes"
+                )
+                
+                # Select value column (for radial values)
+                value_cols = st.sidebar.multiselect(
+                    "Select Value Columns",
+                    [col for col in data.columns if col != category_col],
+                    default=[col for col in data.columns if col != category_col][:1] if len(data.columns) > 1 else [],
+                    help="Select one or more columns containing values for radar chart"
+                )
+                
+                # Chart customization
+                chart_title = st.sidebar.text_input("Chart Title", "Radar Chart")
+                chart_height = st.sidebar.slider("Chart Height", 400, 1000, 600)
+                
+                if 'radar_fig' not in st.session_state:
+                    st.session_state.radar_fig = None
+
+                # Generate radar chart
+                if st.sidebar.button("Generate Radar Chart") or 'radar_fig' in st.session_state:
+                    try:
+                        if not value_cols:
+                            st.error("Please select at least one value column")
+                            st.stop()
+
+                        # Prepare data
+                        categories = data[category_col].tolist()
+                        # Create dictionary of values for each selected column
+                        values_dict = {
+                            col: data[col].tolist() 
+                            for col in value_cols
+                        }
+                        
+                        all_values = [val for sublist in values_dict.values() for val in sublist]
+                        auto_min = np.percentile(all_values, 5) if all_values else 0  
+                        
+                        # Initialize radial_min in session state
+                        if 'radial_min' not in st.session_state:
+                            st.session_state.radial_min = float(auto_min)
+
+                        # Radial axis starting point
+                        radial_min = st.sidebar.slider(
+                            "Radial Axis Starting Point",
+                            min_value=0.0,
+                            max_value=float(np.percentile(all_values, 95)) if all_values else 100.0,
+                            value=st.session_state.radial_min,
+                            step=0.5,
+                            help="Adjust where the radar chart starts from (0 for traditional)",
+                            key="radial_min_slider"
+                        )
+
+                        # Update radial_min in session state if slider changed
+                        if st.session_state.get("radial_min_slider") != st.session_state.radial_min:
+                            st.session_state.radial_min = st.session_state.radial_min_slider
+                        
+                        # Generate chart
+                        fig = generate_radar_chart(
+                            categories=categories,
+                            values_dict=values_dict,
+                            title=chart_title,
+                            height=chart_height,
+                            radial_min=st.session_state.radial_min,
+                        )
+                        
+                        st.session_state.radar_fig = fig
+                        
+                    except Exception as e:
+                        st.error(f"Error generating radar chart: {str(e)}")
+
+                if st.session_state.radar_fig is not None:
+                    st.plotly_chart(st.session_state.radar_fig, use_container_width=True)
+
+            except Exception as e:
+                st.error(f"Error processing file: {str(e)}")
+        else:
+            st.info("Please upload an Excel or CSV file to begin")
 
 if __name__ == '__main__':
     main()

@@ -6,10 +6,16 @@ import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+# create requirements.txt file
+# & "C:\Users\zli0003\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\Scripts\pipreqs.exe" . --encoding=utf8 --force
 def get_excel_sheet_names(file_path):
     """Get all sheet names from an Excel file"""
     try:
-        return pd.ExcelFile(file_path).sheet_names
+        if file_path.name.endswith(('.xlsx', '.xls')):
+            sheet_name = pd.ExcelFile(file_path).sheet_names
+        else: 
+            sheet_name = 0
+        return sheet_name
     except Exception as e:
         raise Exception(f"Error reading Excel sheets: {e}")
     
@@ -29,7 +35,7 @@ def read_data_file(file_path, sheet_name=0, header_row=0):
             data = pd.read_csv(file_path, header=header_row, engine='c',dtype_backend='pyarrow')
         else:
             sheet_name = int(sheet_name) if str(sheet_name).isdigit() else sheet_name
-            data = pd.read_excel(file_path, sheet_name=sheet_name, header=header_row, engine='openpyxl', dtype_backend='pyarrow')
+            data = pd.read_excel(file_path, sheet_name=sheet_name, header=header_row, engine='openpyxl')
         return data
     except Exception as e:
         raise Exception(f"Error reading Excel file: {e}")
@@ -70,61 +76,6 @@ def apply_savgol_filter(data, columns, window_length=21, polyorder=1, mode='near
             
     return smoothed_data
 
-def moving_average(interval, windowsize, mode='same'):
-    """
-    Apply moving average filter
-    
-    Parameters:
-    interval (array-like): Input data
-    windowsize (int): Window size
-    mode (str): Convolution mode
-    
-    Returns:
-    np.array: Smoothed data
-    """
-    window = np.ones(int(windowsize)) / float(windowsize)
-    return np.convolve(interval, window, mode)
-
-def generate_plot(data, x_col, y1_cols, y2_col=None, 
-                 x_label=None, y1_label=None, y2_label=None, title=None):
-    """
-    Generate dual-Y axis plot
-    
-    Parameters:
-    data (pd.DataFrame): Input data
-    x_col (str): Column name for x-axis
-    y1_cols (list): List of column names for left y-axis
-    y2_col (str, optional): Column name for right y-axis
-    x_label (str, optional): Label for x-axis
-    y1_label (str, optional): Label for left y-axis
-    y2_label (str, optional): Label for right y-axis
-    title (str, optional): Plot title
-    
-    Returns:
-    matplotlib.figure.Figure: Generated figure
-    """
-    fig, ax1 = plt.subplots(figsize=(10, 6))
-    
-    # Plot left axis data
-    for column in y1_cols:
-        if column in data.columns:
-            ax1.plot(data[x_col], data[column], label=column)
-    
-    ax1.set_xlabel(x_label or x_col)
-    ax1.set_ylabel(y1_label or "Value")
-    
-    # Plot right axis data if specified
-    if y2_col and y2_col in data.columns:
-        ax2 = ax1.twinx()
-        ax2.plot(data[x_col], data[y2_col], 
-                 label=y2_col, color='purple', linewidth=2)
-        ax2.set_ylabel(y2_label or y2_col)
-    
-    if title:
-        plt.title(title)
-    
-    fig.legend(bbox_to_anchor=(1.1, 1))
-    return fig
 
 def generate_interactive_plot(data, x_col, y1_cols, y2_col=None, 
                             x_label=None, y1_label=None, y2_label=None, 
@@ -285,3 +236,90 @@ def get_min_max_values(uploaded_files,results, file_settings):
         return results_df
     else:
         return pd.DataFrame(columns=['Filename', 'Sheet', 'Column', 'Min Value', 'Max Value'])
+    
+def generate_radar_chart(categories, values_dict, title="Radar Chart", height=600, radial_min=0):
+    """
+    Generate a radar chart using Plotly.
+    """
+    fig = go.Figure()
+    
+    # Define a color palette (you can customize these colors)
+    color_palette = [
+        '#1f77b4',  # muted blue
+        '#ff7f0e',  # safety orange
+        '#2ca02c',  # cooked asparagus green
+        '#d62728',  # brick red
+        '#9467bd',  # muted purple
+        '#8c564b',  # chestnut brown
+        '#e377c2',  # raspberry yogurt pink
+        '#7f7f7f',  # middle gray
+        '#bcbd22',  # curry yellow-green
+        '#17becf'   # blue-teal
+    ]
+
+    max_value = max([max(vals) for vals in values_dict.values() if vals]) if values_dict else 1
+
+    # Ensure all values are non-empty
+    all_values = [val for sublist in values_dict.values() for val in sublist]
+    max_val = max(all_values) if all_values else 1
+    
+    # Calculate radial axis minimum
+    if radial_min is None:  
+        if all_values:
+            lower_percentile = np.percentile(all_values, 5)
+            radial_min = lower_percentile * 0.9 if lower_percentile > max_val * 0.2 else 0
+        else:
+            radial_min = 0
+    
+    # Set radial axis range
+    radial_max = max_val * 1.1
+
+    # Add each series with a different color
+    for i, (name, values) in enumerate(values_dict.items()):
+        fig.add_trace(go.Scatterpolar(
+            r=values,
+            theta=categories,
+            fill='toself' if len(values_dict) == 1 else None,  # Only fill if single series
+            name=name,
+            line=dict(color=color_palette[i % len(color_palette)], width=2),
+            opacity=0.8
+        ))
+    label_interval = max(1, len(categories) // 18)  # Adjust label interval based on number of categories
+
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(
+                visible=True,
+                range=[radial_min, radial_max]
+            ),
+            angularaxis=dict(
+                # Adjust category label display
+                tickmode='array',
+                direction="clockwise",
+                tickvals=list(range(len(categories)))[::label_interval],  # Skip some labels
+                ticktext=categories[::label_interval],  # Skip some labels
+                tickangle=45,  # Rotate labels for better readability
+                tickfont=dict(size=10)  # Smaller font for more labels
+            )
+        ),
+        showlegend=True,
+        title=dict(
+            text=title,
+            y=0.95,  # Adjust title position
+            x=0.5,
+            xanchor="center",
+            yanchor="top"
+        ),
+        height=height,
+        margin=dict(l=50, r=50, t=80, b=80),  # Adjust margins
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.2,  # Move legend below chart
+            xanchor="center",
+            x=0.5,
+            font=dict(size=10)  # Smaller legend font
+        )
+    )
+    
+    return fig
