@@ -1,16 +1,17 @@
 import streamlit as st
-from utils.functions_st import get_excel_sheet_names, read_data_file, apply_savgol_filter, generate_interactive_plot, get_min_max_values
-from utils.functions_st import generate_radar_chart
+from utils.functions_st import get_excel_sheet_names, read_data_file, apply_savgol_filter, generate_interactive_plot, get_min_max_values, extract_min_max_values
+from utils.functions_st import generate_radar_chart, get_integer_values, read_upload_files
 import pandas as pd
 import numpy as np
 from io import BytesIO
+
 # C:\Users\zli0003\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\Scripts\streamlit.exe run c:/Users/zli0003/PycharmProjects/ML_algorithm/streamlit/app.py
 
 def main():
     st.set_page_config(page_title="Data Smoothing & Visualization", page_icon= "📊", 
                     layout="wide")
     st.sidebar.title("Function Selector")
-    option = st.sidebar.selectbox("Select", ("Data Smoothing", "Min-Max Values Calculation", "Radar Chart"))
+    option = st.sidebar.selectbox("Select", ("Data Smoothing", "Min-Max Values Calculation", "Radar Chart", "Find Integer Values"))
     this_moment = pd.to_datetime('now').strftime('%Y-%m-%d %H:%M:%S')
 
     if option == "Data Smoothing":
@@ -336,12 +337,12 @@ def main():
                     try:
                         # Read and process each file with the specified header row
                         results = []
-                        results_df = get_min_max_values(uploaded_files, results, file_settings)
+                        results_df_extreme = get_min_max_values(uploaded_files, results, file_settings)
                         # Store results in session state
-                        st.session_state.results_df = results_df
+                        st.session_state.results_df_extreme = results_df_extreme
                         # Display results
                         st.subheader("Min-Max Results")
-                        st.dataframe(results_df)
+                        st.dataframe(results_df_extreme)
                         # Add success message
                         st.success("Files processed successfully!")
                     except Exception as e:
@@ -351,13 +352,13 @@ def main():
             st.sidebar.header("Export Results")
             if st.sidebar.button("Generate Min-Max Report"):
                 print(f"Generating report at {this_moment}")
-                if 'results_df' not in st.session_state or st.session_state.results_df.empty:
+                if 'results_df_extreme' not in st.session_state or st.session_state.results_df_extreme.empty:
                     st.sidebar.warning("No data available to generate report.")
                 else:
                     try:
                         output = BytesIO()
                         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                            st.session_state.results_df.to_excel(writer, index=False, sheet_name='Min-Max Results')
+                            st.session_state.results_df_extreme.to_excel(writer, index=False, sheet_name='Min-Max Results')
                         output.seek(0)  # Reset the BytesIO object to the beginning
                         st.sidebar.success("Report generated successfully!")
                         st.sidebar.download_button(
@@ -505,5 +506,67 @@ def main():
         else:
             st.info("Please upload an Excel or CSV file to begin")
 
+    # Find integer values tool
+    if option == "Find Integer Values":
+        st.title("Min-Max Values Calculation Tool")
+        # Files upload section
+        st.sidebar.header("File Upload")
+        uploaded_files = st.sidebar.file_uploader("Upload Excel/CSV Files", 
+                                                type=["xlsx", "xls", "csv"],
+                                                accept_multiple_files=True,
+                                                help="Select multiple files for min-max calculation")
+        preview_rows = st.slider("Number of preview rows", 1, 20, 5, 
+                                help="Select number of preview rows.")
+        if uploaded_files:
+            
+            # Create a form for header row settings
+            with st.form("header_settings"):
+                st.subheader("Header Row Configuration")
+                
+                results = read_upload_files(uploaded_files,preview_rows)
+                # print(f"Results from read_upload_files: {results}")
+                
+                # Submit button for the form
+                submitted = st.form_submit_button("Apply Settings and Process Files")
+            
+            if submitted:
+                with st.spinner('Processing files...'):
+                    try:
+                        # Read and process each file with the specified header row
+                        results_df_extreme = extract_min_max_values(results)
+                        # Store results in session state
+                        st.session_state.results_df_extreme = results_df_extreme
+                        # Display results
+                        st.subheader("Min-Max Results")
+                        st.dataframe(results_df_extreme)
+                        # Add success message
+                        st.success("Files processed successfully!")
+                    except Exception as e:
+                        st.error(f"Error processing files: {str(e)}")
+
+            # Export to Excel
+            st.sidebar.header("Export Results")
+            if st.sidebar.button("Generate Min-Max Report"):
+                print(f"Generating report at {this_moment}")
+                if 'results_df_extreme' not in st.session_state or st.session_state.results_df_extreme.empty:
+                    st.sidebar.warning("No data available to generate report.")
+                else:
+                    try:
+                        output = BytesIO()
+                        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                            st.session_state.results_df_extreme.to_excel(writer, index=False, sheet_name='Min-Max Results')
+                        output.seek(0)  # Reset the BytesIO object to the beginning
+                        st.sidebar.success("Report generated successfully!")
+                        st.sidebar.download_button(
+                            label="Download Min-Max Report",
+                            data=output,
+                            file_name=f"min_max_report_{this_moment}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                    except Exception as e:
+                        st.sidebar.error(f"Error generating report: {str(e)}")
+        else:
+            st.info("Please upload Excel/CSV files to begin")
+    
 if __name__ == '__main__':
     main()
