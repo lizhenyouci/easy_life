@@ -9,8 +9,7 @@ import pandas as pd
 from typing import List
 
 # create requirements.txt file
-# & "C:\Users\zli0003\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\Scripts\pipreqs.exe" . --encoding=utf8 --force
-
+# C:\Users\zli0003\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\Scripts\pipreqs.exe . --encoding=utf8 --force
 def get_excel_sheet_names(file_path):
     """Get all sheet names from an Excel file"""
     try:
@@ -473,96 +472,6 @@ def extract_min_max_values(results_df):
                                 #    'File Type', 'Header Row', 'Selected Columns'
                                    ])
     
-def get_min_max_values(uploaded_files, results, file_settings):
-    for file in uploaded_files:
-        try:
-            # Read file based on type with user-specified header row
-            if file.name.endswith(('.xlsx', '.xls')):
-                excel_file = pd.ExcelFile(file)
-                for sheet_name in excel_file.sheet_names:
-                    header_row = file_settings.get((file.name, sheet_name), 0)
-                    try:
-                        df = pd.read_excel(file, 
-                                            sheet_name=sheet_name, 
-                                            header=header_row
-                                            )
-                        
-                        # If header row was specified but didn't work, try again with header=None
-                        if any('Unnamed' in col for col in df.columns):
-                            df = pd.read_excel(file, 
-                                                sheet_name=sheet_name, 
-                                                header=None)
-                            actual_header = header_row
-                            df.columns = df.iloc[actual_header].astype(str)
-                            df = df.iloc[actual_header+1:].reset_index(drop=True)
-                        
-                        # Calculate min/max for each column
-                        for col in df.columns:
-                            try:
-                                # Convert to numeric if possible
-                                numeric_series = pd.to_numeric(df[col], errors='coerce')
-                                if not numeric_series.isna().all():  # If at least some numeric values
-                                    min_val = numeric_series.min()
-                                    max_val = numeric_series.max()
-                                    results.append({
-                                        'Filename': str(file.name),
-                                        'Sheet': str(sheet_name),
-                                        'Column': str(col),
-                                        'Min Value': float(min_val) if pd.notna(min_val) else 'N/A',
-                                        'Max Value': float(max_val) if pd.notna(max_val) else 'N/A'
-                                    })
-                            except Exception:
-                                continue
-                    except Exception as e:
-                        st.warning(f"Error processing {file.name} (sheet: {sheet_name}): {str(e)}")
-                        continue
-            else:  # CSV files
-                header_row = file_settings.get(file.name, 0)
-                file.seek(0)
-                try:
-                    df = pd.read_csv(file, 
-                                     header=header_row)
-                    # If header row was specified but didn't work, try again with header=None
-                    if any('Unnamed' in col for col in df.columns):
-                        file.seek(0)
-                        df = pd.read_csv(file, header=None)
-                        actual_header = header_row
-                        df.columns = df.iloc[actual_header].astype(str)
-                        df = df.iloc[actual_header+1:].reset_index(drop=True)
-                    
-                    # Calculate min/max for each column
-                    for col in df.columns:
-                        try:
-                            numeric_series = pd.to_numeric(df[col], errors='coerce')
-                            if not numeric_series.isna().all():
-                                min_val = numeric_series.min()
-                                max_val = numeric_series.max()
-                                results.append({
-                                    'Filename': str(file.name),
-                                    'Sheet': 'N/A',
-                                    'Column': str(col),
-                                    'Min Value': float(min_val) if pd.notna(min_val) else None,
-                                    'Max Value': float(max_val) if pd.notna(max_val) else None
-                                })
-                        except Exception:
-                            continue
-                except Exception as e:
-                    st.warning(f"Error processing {file.name}: {str(e)}")
-                    continue
-        
-        except Exception as e:
-            st.warning(f"Error opening {file.name}: {str(e)}")
-            continue
-    if results:
-        results_df = pd.DataFrame(results)
-
-        # Convert all object columns to string for Arrow compatibility
-        for col in results_df.select_dtypes(include=['object']).columns:
-            results_df[col] = results_df[col].astype(str)
-        return results_df
-    else:
-        return pd.DataFrame(columns=['Filename', 'Sheet', 'Column', 'Min Value', 'Max Value'])
-
 def get_integer_values(uploaded_files, results, file_settings):
     for file in uploaded_files:
         try:
