@@ -1,5 +1,5 @@
 import streamlit as st
-from utils.functions_st import get_excel_sheet_names, read_data_file, apply_savgol_filter, generate_interactive_plot, get_min_max_values, extract_min_max_values
+from utils.functions_st import get_excel_sheet_names, read_data_file, apply_savgol_filter, generate_interactive_plot, extract_min_max_values
 from utils.functions_st import generate_radar_chart, get_integer_values, read_upload_files
 import pandas as pd
 import numpy as np
@@ -11,7 +11,8 @@ def main():
     st.set_page_config(page_title="Data Smoothing & Visualization", page_icon= "📊", 
                     layout="wide")
     st.sidebar.title("Function Selector")
-    option = st.sidebar.selectbox("Select", ("Data Smoothing", "Min-Max Values Calculation", "Radar Chart", "Find Integer Values"))
+    option = st.sidebar.selectbox("Select", ("Data Smoothing", "Min-Max Values Calculation", "Radar Chart"))
+    # , "Find Integer Values"
     this_moment = pd.to_datetime('now').strftime('%Y-%m-%d %H:%M:%S')
 
     if option == "Data Smoothing":
@@ -265,112 +266,6 @@ def main():
                 st.error(f"Error processing file: {str(e)}")
         else:
             st.info("Please upload an Excel/CSV file to begin")
-
-    if option == "Min-Max Values Calculation":
-        st.title("Min-Max Values Calculation Tool")
-        # Files upload section
-        st.sidebar.header("File Upload")
-        uploaded_files = st.sidebar.file_uploader("Upload Excel/CSV Files", 
-                                                type=["xlsx", "xls", "csv"],
-                                                accept_multiple_files=True,
-                                                help="Select multiple files for min-max calculation")
-        preview_rows = st.slider("Number of preview rows", 1, 20, 5, 
-                                help="Select number of preview rows.")
-        if uploaded_files:
-            # Initialize results dataframe
-            # results = []
-            file_settings = {}  # Store header row settings for each file
-            
-            # Create a form for header row settings
-            with st.form("header_settings"):
-                st.subheader("Header Row Configuration")
-                
-                # Create settings for each file
-                for file_idx, file in enumerate(uploaded_files):
-                    st.markdown(f"**{file.name}**")
-                    
-                    # Different settings for Excel vs CSV
-                    if file.name.endswith(('.xlsx', '.xls')):
-                        try:
-                            excel_file = pd.ExcelFile(file)
-                            sheet_names = excel_file.sheet_names
-                            
-                            for sheet_idx, sheet_name in enumerate(sheet_names):
-                                # Preview first few rows to help user decide
-                                df_preview = pd.read_excel(file, sheet_name=sheet_name, header=None)
-                                df_preview = df_preview.astype(str)
-                                st.write(f"Sheet: {sheet_name} - First {preview_rows} rows:")
-                                st.dataframe(df_preview.head(preview_rows))
-                                
-                                header_row = st.number_input(
-                                    f"Header row for {file.name} - {sheet_name}",
-                                    min_value=0,
-                                    max_value=20,
-                                    value=0,
-                                    key=f"header_{file_idx}_{sheet_idx}"
-                                )
-                                file_settings[(file.name, sheet_name)] = header_row
-
-                        except Exception as e:
-                            st.error(f"Error previewing {file.name}: {str(e)}")
-                    else:  # CSV files
-                        # Preview first few rows to help user decide
-                        df_preview = pd.read_csv(file, header=None)
-                        df_preview = df_preview.astype(str)
-                        st.write(f"File: {file.name} - First {preview_rows} rows:")
-                        st.dataframe(df_preview.head(preview_rows))
-                        
-                        header_row = st.number_input(
-                            f"Header row for {file.name}",
-                            min_value=0,
-                            max_value=20,
-                            value=0,
-                            key=f"header_{file_idx}"
-                        )
-                        file_settings[file.name] = header_row
-                
-                # Submit button for the form
-                submitted = st.form_submit_button("Apply Settings and Process Files")
-            
-            if submitted:
-                with st.spinner('Processing files...'):
-                    try:
-                        # Read and process each file with the specified header row
-                        results = []
-                        results_df_extreme = get_min_max_values(uploaded_files, results, file_settings)
-                        # Store results in session state
-                        st.session_state.results_df_extreme = results_df_extreme
-                        # Display results
-                        st.subheader("Min-Max Results")
-                        st.dataframe(results_df_extreme)
-                        # Add success message
-                        st.success("Files processed successfully!")
-                    except Exception as e:
-                        st.error(f"Error processing files: {str(e)}")
-
-            # Export to Excel
-            st.sidebar.header("Export Results")
-            if st.sidebar.button("Generate Min-Max Report"):
-                print(f"Generating report at {this_moment}")
-                if 'results_df_extreme' not in st.session_state or st.session_state.results_df_extreme.empty:
-                    st.sidebar.warning("No data available to generate report.")
-                else:
-                    try:
-                        output = BytesIO()
-                        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                            st.session_state.results_df_extreme.to_excel(writer, index=False, sheet_name='Min-Max Results')
-                        output.seek(0)  # Reset the BytesIO object to the beginning
-                        st.sidebar.success("Report generated successfully!")
-                        st.sidebar.download_button(
-                            label="Download Min-Max Report",
-                            data=output,
-                            file_name=f"min_max_report_{this_moment}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
-                    except Exception as e:
-                        st.sidebar.error(f"Error generating report: {str(e)}")
-        else:
-            st.info("Please upload Excel/CSV files to begin")
     
     # Radar chart example
     if option == "Radar Chart":
@@ -507,7 +402,7 @@ def main():
             st.info("Please upload an Excel or CSV file to begin")
 
     # Find integer values tool
-    if option == "Find Integer Values":
+    if option == "Min-Max Values Calculation":
         st.title("Min-Max Values Calculation Tool")
         # Files upload section
         st.sidebar.header("File Upload")
